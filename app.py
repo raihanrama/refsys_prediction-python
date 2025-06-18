@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import time
 import base64
 from io import BytesIO
+import tempfile
 
 # Fungsi untuk mengatur tema yang responsif
 def setup_theme():
@@ -264,12 +265,13 @@ if uploaded_file is not None:
             model_option = st.radio("Pilih model:", ["Model Default", "Upload Model Kustom"], horizontal=True)
             
             if model_option == "Upload Model Kustom":
-                model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
-                if model_file:
-                    # Simpan model sementara
-                    model_bytes = BytesIO(model_file.read())
-                    model = load_model(model_bytes)
-                    st.success("✅ Model berhasil diunggah!")
+model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
+if model_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as tmp:
+        tmp.write(model_file.read())
+        tmp_path = tmp.name
+    model = load_model(tmp_path)
+    st.success("✅ Model berhasil diunggah!")
                 else:
                     st.warning("⚠️ Model belum diunggah, akan menggunakan model default.")
                     model = None
