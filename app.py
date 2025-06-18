@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from tensorflow.keras.models import load_model
+from tensorflow.keras.models import load_model  # type: ignore
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import time
@@ -267,20 +267,31 @@ if uploaded_file is not None:
             if model_option == "Upload Model Kustom":
                 model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
                 if model_file:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as tmp:
-                        tmp.write(model_file.read())
-                        tmp_path = tmp.name
-                    model = load_model(tmp_path)
-                    st.success("✅ Model berhasil diunggah!")
+                    try:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as tmp:
+                            tmp.write(model_file.read())
+                            tmp_path = tmp.name
+                        # Try loading with compile=False to avoid compatibility issues
+                        model = load_model(tmp_path, compile=False)
+                        st.success("✅ Model berhasil diunggah!")
+                    except Exception as e:
+                        st.error(f"❌ Gagal memuat model: {str(e)}")
+                        st.error("Pastikan file model kompatibel dengan versi TensorFlow/Keras yang digunakan.")
+                        model = None
                 else:
                     st.warning("⚠️ Model belum diunggah, akan menggunakan model default.")
                     model = None
             else:
                 try:
-                    model = load_model("model_lstm_refsys.h5")
+                    # Try loading with compile=False to avoid compatibility issues
+                    model = load_model("model_lstm_refsys.h5", compile=False)
                     st.info("ℹ️ Menggunakan model default")
-                except:
+                except FileNotFoundError:
                     st.error("❌ Model default tidak ditemukan. Silakan upload model Anda.")
+                    model = None
+                except Exception as e:
+                    st.error(f"❌ Gagal memuat model default: {str(e)}")
+                    st.error("Model mungkin tidak kompatibel dengan versi TensorFlow/Keras yang digunakan.")
                     model = None
             
             # Tombol untuk memulai prediksi
