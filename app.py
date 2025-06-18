@@ -268,19 +268,19 @@ if uploaded_file is not None:
             model_option = st.radio("Pilih model:", ["Model Default", "Upload Model Kustom"], horizontal=True)
             
             if model_option == "Upload Model Kustom":
-                model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
+                model_file = st.file_uploader("Upload file model (.keras):", type=["keras"])
                 if model_file:
                     try:
                         # Buat direktori temporary
                         temp_dir = tempfile.mkdtemp()
-                        temp_model_path = os.path.join(temp_dir, "temp_model.h5")
+                        temp_model_path = os.path.join(temp_dir, "temp_model.keras")
                         
                         # Simpan file model
                         with open(temp_model_path, "wb") as f:
                             f.write(model_file.getvalue())
                         
-                        # Load model
-                        model = load_model(temp_model_path)
+                        # Load model dengan custom_objects
+                        model = load_model(temp_model_path, compile=False)
                         
                         # Bersihkan file temporary
                         os.remove(temp_model_path)
@@ -296,7 +296,7 @@ if uploaded_file is not None:
             else:
                 try:
                     # Coba load model default
-                    model = load_model("model_lstm_refsys.h5")
+                    model = load_model("model_lstm_refsys.keras", compile=False)
                     st.info("ℹ️ Menggunakan model default")
                 except Exception as e:
                     st.error(f"❌ Model default tidak ditemukan: {str(e)}")
