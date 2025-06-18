@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from tensorflow.keras.models import load_model  # type: ignore
+from tensorflow.keras.models import load_model
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import time
 import base64
 from io import BytesIO
-import tempfile
 
 # Fungsi untuk mengatur tema yang responsif
 def setup_theme():
@@ -265,33 +264,21 @@ if uploaded_file is not None:
             model_option = st.radio("Pilih model:", ["Model Default", "Upload Model Kustom"], horizontal=True)
             
             if model_option == "Upload Model Kustom":
-                model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
+                model_file = st.file_uploader("Upload file model (.keras):", type=["keras"])
                 if model_file:
-                    try:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as tmp:
-                            tmp.write(model_file.read())
-                            tmp_path = tmp.name
-                        # Try loading with compile=False to avoid compatibility issues
-                        model = load_model(tmp_path, compile=False)
-                        st.success("✅ Model berhasil diunggah!")
-                    except Exception as e:
-                        st.error(f"❌ Gagal memuat model: {str(e)}")
-                        st.error("Pastikan file model kompatibel dengan versi TensorFlow/Keras yang digunakan.")
-                        model = None
+                    # Simpan model sementara
+                    model_bytes = BytesIO(model_file.read())
+                    model = load_model(model_bytes)
+                    st.success("✅ Model berhasil diunggah!")
                 else:
                     st.warning("⚠️ Model belum diunggah, akan menggunakan model default.")
                     model = None
             else:
                 try:
-                    # Try loading with compile=False to avoid compatibility issues
-                    model = load_model("model_lstm_refsys.h5", compile=False)
+                    model = load_model("model_lstm_refsys.keras")
                     st.info("ℹ️ Menggunakan model default")
-                except FileNotFoundError:
+                except:
                     st.error("❌ Model default tidak ditemukan. Silakan upload model Anda.")
-                    model = None
-                except Exception as e:
-                    st.error(f"❌ Gagal memuat model default: {str(e)}")
-                    st.error("Model mungkin tidak kompatibel dengan versi TensorFlow/Keras yang digunakan.")
                     model = None
             
             # Tombol untuk memulai prediksi
