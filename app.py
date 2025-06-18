@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import time
 import base64
 from io import BytesIO
+import os
 
 # Fungsi untuk mengatur tema yang responsif
 def setup_theme():
@@ -266,10 +267,18 @@ if uploaded_file is not None:
             if model_option == "Upload Model Kustom":
                 model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
                 if model_file:
-                    # Simpan model sementara
-                    model_bytes = BytesIO(model_file.read())
-                    model = load_model(model_bytes)
-                    st.success("✅ Model berhasil diunggah!")
+                    try:
+                        # Simpan file sementara
+                        with open("temp_model.h5", "wb") as f:
+                            f.write(model_file.getvalue())
+                        # Load model dari file temporary
+                        model = load_model("temp_model.h5")
+                        # Hapus file temporary
+                        os.remove("temp_model.h5")
+                        st.success("✅ Model berhasil diunggah!")
+                    except Exception as e:
+                        st.error(f"❌ Gagal memuat model: {str(e)}")
+                        model = None
                 else:
                     st.warning("⚠️ Model belum diunggah, akan menggunakan model default.")
                     model = None
@@ -277,8 +286,8 @@ if uploaded_file is not None:
                 try:
                     model = load_model("model_lstm_refsys.h5")
                     st.info("ℹ️ Menggunakan model default")
-                except:
-                    st.error("❌ Model default tidak ditemukan. Silakan upload model Anda.")
+                except Exception as e:
+                    st.error(f"❌ Model default tidak ditemukan: {str(e)}")
                     model = None
             
             # Tombol untuk memulai prediksi
