@@ -268,26 +268,23 @@ if uploaded_file is not None:
             model_option = st.radio("Pilih model:", ["Model Default", "Upload Model Kustom"], horizontal=True)
             
             if model_option == "Upload Model Kustom":
-                model_file = st.file_uploader("Upload file model (folder SavedModel):", type=["zip"])
+                model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
                 if model_file:
                     try:
                         # Buat direktori temporary
                         temp_dir = tempfile.mkdtemp()
-                        temp_zip = os.path.join(temp_dir, "model.zip")
+                        temp_model_path = os.path.join(temp_dir, "temp_model.h5")
                         
-                        # Simpan file zip
-                        with open(temp_zip, "wb") as f:
+                        # Simpan file model
+                        with open(temp_model_path, "wb") as f:
                             f.write(model_file.getvalue())
                         
-                        # Extract zip file
-                        with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
-                            zip_ref.extractall(temp_dir)
-                        
-                        # Load model dari direktori
-                        model = load_model(temp_dir)
+                        # Load model
+                        model = load_model(temp_model_path)
                         
                         # Bersihkan file temporary
-                        shutil.rmtree(temp_dir)
+                        os.remove(temp_model_path)
+                        os.rmdir(temp_dir)
                         
                         st.success("✅ Model berhasil diunggah!")
                     except Exception as e:
@@ -298,7 +295,8 @@ if uploaded_file is not None:
                     model = None
             else:
                 try:
-                    model = load_model("model_lstm_refsys")
+                    # Coba load model default
+                    model = load_model("model_lstm_refsys.h5")
                     st.info("ℹ️ Menggunakan model default")
                 except Exception as e:
                     st.error(f"❌ Model default tidak ditemukan: {str(e)}")
