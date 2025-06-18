@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 import time
 import base64
 from io import BytesIO
-import tempfile
-import os
 
 # Fungsi untuk mengatur tema yang responsif
 def setup_theme():
@@ -128,34 +126,6 @@ def display_target_not_achieved_card(max_days, threshold):
 def loading_animation():
     with st.spinner('Sedang memproses...'):
         time.sleep(2)
-
-# Fungsi untuk memuat model dengan aman
-def load_model_safely(model_file_or_path):
-    """
-    Memuat model dengan penanganan error yang lebih baik
-    """
-    try:
-        if isinstance(model_file_or_path, str):
-            # Jika path string (model default)
-            model = load_model(model_file_or_path)
-            return model, True, "Model berhasil dimuat"
-        else:
-            # Jika uploaded file
-            # Buat temporary file untuk menyimpan model
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.keras') as tmp_file:
-                tmp_file.write(model_file_or_path.read())
-                tmp_file_path = tmp_file.name
-            
-            try:
-                model = load_model(tmp_file_path)
-                return model, True, "Model berhasil dimuat"
-            finally:
-                # Hapus temporary file setelah digunakan
-                if os.path.exists(tmp_file_path):
-                    os.unlink(tmp_file_path)
-                    
-    except Exception as e:
-        return None, False, f"Error memuat model: {str(e)}"
 
 # Konfigurasi Streamlit
 st.set_page_config(
@@ -293,186 +263,166 @@ if uploaded_file is not None:
             # Upload model atau gunakan model default
             model_option = st.radio("Pilih model:", ["Model Default", "Upload Model Kustom"], horizontal=True)
             
-            model = None
-            model_loaded = False
-            
             if model_option == "Upload Model Kustom":
-                model_file = st.file_uploader("Upload file model (.keras):", type=["keras"])
+                model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
                 if model_file:
-                    with st.spinner("Memuat model..."):
-                        model, model_loaded, message = load_model_safely(model_file)
-                        if model_loaded:
-                            st.success(f"✅ {message}")
-                        else:
-                            st.error(f"❌ {message}")
+                    # Simpan model sementara
+                    model_bytes = BytesIO(model_file.read())
+                    model = load_model(model_bytes)
+                    st.success("✅ Model berhasil diunggah!")
                 else:
-                    st.warning("⚠️ Model belum diunggah, akan menggunakan model default jika tersedia.")
+                    st.warning("⚠️ Model belum diunggah, akan menggunakan model default.")
+                    model = None
             else:
-                # Coba muat model default
-                default_model_paths = ["model_lstm_refsys.keras", "model_lstm_refsys.h5"]
-                
-                for model_path in default_model_paths:
-                    if os.path.exists(model_path):
-                        with st.spinner("Memuat model default..."):
-                            model, model_loaded, message = load_model_safely(model_path)
-                            if model_loaded:
-                                st.info(f"ℹ️ Menggunakan model default: {model_path}")
-                                break
-                            else:
-                                st.warning(f"⚠️ Gagal memuat {model_path}: {message}")
-                
-                if not model_loaded:
+                try:
+                    model = load_model("model_lstm_refsys.h5")
+                    st.info("ℹ️ Menggunakan model default")
+                except:
                     st.error("❌ Model default tidak ditemukan. Silakan upload model Anda.")
+                    model = None
             
             # Tombol untuk memulai prediksi
             predict_btn = st.button("Jalankan Prediksi", use_container_width=True)
             
-            if predict_btn:
-                if not model_loaded or model is None:
-                    st.error("❌ Model belum dimuat. Silakan pilih model terlebih dahulu.")
-                else:
-                    # Tampilkan animasi loading
-                    loading_animation()
-                    
-                    try:
-                        # Siapkan scaler
-                        scaler = MinMaxScaler(feature_range=(0, 1))
-                        scaler.fit(df[['REFSYS']].values.reshape(-1, 1))
+            if predict_btn and model is not None:
+                # Tampilkan animasi loading
+                loading_animation()
+                
+                # Siapkan scaler
+                scaler = MinMaxScaler(feature_range=(0, 1))
+                scaler.fit(df[['REFSYS']].values.reshape(-1, 1))
+                
+                seq_length = 30
+                mjd_last = df['MJD'].max()
+                future_mjd = mjd_last + 1
+                predicted_mjd_list = []
+                refsys_progress_data = []
+                
+                # Container untuk hasil prediksi
+                st.markdown('<h3 class="card-title">Hasil Prediksi</h3>', unsafe_allow_html=True)
+                results_container = st.container()
+                
+                with results_container:
+                    for loop in range(num_loops):
+                        st.markdown(f'<h4 class="card-title">Iterasi {loop+1}</h4>', unsafe_allow_html=True)
                         
-                        seq_length = 30
-                        mjd_last = df['MJD'].max()
-                        future_mjd = mjd_last + 1
-                        predicted_mjd_list = []
-                        refsys_progress_data = []
+                        refsys_input = refsys_inputs[loop]
                         
-                        # Container untuk hasil prediksi
-                        st.markdown('<h3 class="card-title">Hasil Prediksi</h3>', unsafe_allow_html=True)
-                        results_container = st.container()
+                        # Animasi progress bar
+                        progress_bar = st.progress(0)
                         
-                        with results_container:
-                            for loop in range(num_loops):
-                                st.markdown(f'<h4 class="card-title">Iterasi {loop+1}</h4>', unsafe_allow_html=True)
-                                
-                                refsys_input = refsys_inputs[loop]
-                                
-                                # Animasi progress bar
-                                progress_bar = st.progress(0)
-                                
-                                # Normalisasi nilai awal
-                                scaled_input = scaler.transform([[refsys_input]])[0][0]
-                                last_30_days = np.full((1, seq_length, 1), scaled_input)
-                                
-                                max_prediction_days = 200
-                                days_needed = 0
-                                future_refsys = []
-                                
-                                progress_step = 1.0 / max_prediction_days
-                                
-                                for day in range(max_prediction_days):
-                                    prediction = model.predict(last_30_days, verbose=0)[0][0]
-                                    pred_original = scaler.inverse_transform([[prediction]])[0][0]
-                                    
-                                    future_refsys.append((future_mjd, pred_original))
-                                    days_needed += 1
-                                    future_mjd += 1
-                                    
-                                    # Update progress bar
-                                    progress_bar.progress((day + 1) * progress_step)
-                                    
-                                    last_30_days = np.append(last_30_days[:, 1:, :], [[[prediction]]], axis=1)
-                                    
-                                    if pred_original >= threshold:
-                                        predicted_mjd_list.append(future_mjd - 1)
-                                        break
-                                
-                                # Setelah loop selesai, progress bar = 100%
-                                progress_bar.progress(1.0)
-                                
-                                # Visualisasi hasil iterasi dengan warna yang adaptif
-                                mjd_vals = [m[0] for m in future_refsys]
-                                refsys_vals = [m[1] for m in future_refsys]
-                                refsys_progress_data.append((mjd_vals, refsys_vals))
-                                
-                                col1, col2 = st.columns([2, 1])
-                                
-                                with col1:
-                                    fig, ax = plt.subplots(figsize=(10, 6))
-                                    # Gunakan warna yang kompatibel dengan tema apa pun
-                                    ax.plot(mjd_vals, refsys_vals, marker='o', linestyle='-', color='#3B82F6', 
-                                           label='Prediksi REFSYS')
-                                    ax.axhline(threshold, color='#EF4444', linestyle='--', label=f'Ambang {threshold}')
-                                    
-                                    # Styling
-                                    ax.set_xlabel('MJD')
-                                    ax.set_ylabel('Nilai REFSYS')
-                                    ax.set_title(f'Iterasi #{loop+1}: Proyeksi REFSYS Setelah Reset', fontsize=14)
-                                    ax.grid(True, alpha=0.3)
-                                    ax.legend()
-                                    
-                                    # Fill area dengan warna adaptif
-                                    ax.fill_between(mjd_vals, refsys_vals, threshold, 
-                                                  where=(np.array(refsys_vals) < threshold), 
-                                                  interpolate=True, color='#93C5FD', alpha=0.5)
-                                    
-                                    plt.tight_layout()
-                                    st.pyplot(fig)
-                                
-                                with col2:
-                                    if days_needed < max_prediction_days:
-                                        # Gunakan fungsi khusus untuk menampilkan kartu
-                                        display_target_achieved_card(days_needed, predicted_mjd_list[-1])
-                                    else:
-                                        # Gunakan fungsi khusus untuk menampilkan kartu
-                                        display_target_not_achieved_card(max_prediction_days, threshold)
+                        # Normalisasi nilai awal
+                        scaled_input = scaler.transform([[refsys_input]])[0][0]
+                        last_30_days = np.full((1, seq_length, 1), scaled_input)
+                        
+                        max_prediction_days = 200
+                        days_needed = 0
+                        future_refsys = []
+                        
+                        progress_step = 1.0 / max_prediction_days
+                        
+                        for day in range(max_prediction_days):
+                            prediction = model.predict(last_30_days, verbose=0)[0][0]
+                            pred_original = scaler.inverse_transform([[prediction]])[0][0]
                             
-                            # Ringkasan hasil semua iterasi
-                            if predicted_mjd_list:
-                                st.markdown('<h3 class="card-title">Rekapitulasi Hasil Prediksi</h3>', unsafe_allow_html=True)
-                                
-                                # Visualisasi gabungan semua iterasi dengan warna adaptif
-                                fig, ax = plt.subplots(figsize=(12, 7))
-                                
-                                # Pilih palet warna yang berfungsi pada tema gelap dan terang
-                                colors = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899']
-                                
-                                for i, (mjd_vals, refsys_vals) in enumerate(refsys_progress_data):
-                                    ax.plot(mjd_vals, refsys_vals, marker='.', linestyle='-', 
-                                           color=colors[i % len(colors)],
-                                           label=f'Iterasi #{i+1}', alpha=0.7)
-                                
-                                ax.axhline(threshold, color='#EF4444', linestyle='--', label=f'Ambang {threshold}')
-                                ax.set_xlabel('MJD')
-                                ax.set_ylabel('Nilai REFSYS')
-                                ax.set_title('Perbandingan Semua Iterasi', fontsize=14)
-                                ax.grid(True, alpha=0.3)
-                                ax.legend()
-                                
-                                plt.tight_layout()
-                                st.pyplot(fig)
-                                
-                                # Tabel ringkasan
-                                result_data = {
-                                    "Iterasi": [f"#{i+1}" for i in range(len(predicted_mjd_list))],
-                                    "MJD Target": predicted_mjd_list,
-                                    "Nilai REFSYS Awal": refsys_inputs[:len(predicted_mjd_list)],
-                                    "Hari Setelah Reset": [len(refsys_progress_data[i][0]) for i in range(len(predicted_mjd_list))]
-                                }
-                                
-                                result_df = pd.DataFrame(result_data)
-                                st.dataframe(result_df, use_container_width=True)
-                                
-                                # Opsi download hasil
-                                csv = result_df.to_csv(index=False)
-                                st.download_button(
-                                    label="📥 Download Hasil Prediksi (CSV)",
-                                    data=csv,
-                                    file_name="prediksi_refsys_hasil.csv",
-                                    mime="text/csv",
-                                    use_container_width=True
-                                )
+                            future_refsys.append((future_mjd, pred_original))
+                            days_needed += 1
+                            future_mjd += 1
+                            
+                            # Update progress bar
+                            progress_bar.progress((day + 1) * progress_step)
+                            
+                            last_30_days = np.append(last_30_days[:, 1:, :], [[[prediction]]], axis=1)
+                            
+                            if pred_original >= threshold:
+                                predicted_mjd_list.append(future_mjd - 1)
+                                break
+                        
+                        # Setelah loop selesai, progress bar = 100%
+                        progress_bar.progress(1.0)
+                        
+                        # Visualisasi hasil iterasi dengan warna yang adaptif ke tema
+                        mjd_vals = [m[0] for m in future_refsys]
+                        refsys_vals = [m[1] for m in future_refsys]
+                        refsys_progress_data.append((mjd_vals, refsys_vals))
+                        
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            fig, ax = plt.subplots(figsize=(10, 6))
+                            # Gunakan warna yang kompatibel dengan tema apa pun
+                            ax.plot(mjd_vals, refsys_vals, marker='o', linestyle='-', color='#3B82F6', 
+                                   label='Prediksi REFSYS')
+                            ax.axhline(threshold, color='#EF4444', linestyle='--', label=f'Ambang {threshold}')
+                            
+                            # Styling
+                            ax.set_xlabel('MJD')
+                            ax.set_ylabel('Nilai REFSYS')
+                            ax.set_title(f'Iterasi #{loop+1}: Proyeksi REFSYS Setelah Reset', fontsize=14)
+                            ax.grid(True, alpha=0.3)
+                            ax.legend()
+                            
+                            # Fill area dengan warna adaptif
+                            ax.fill_between(mjd_vals, refsys_vals, threshold, 
+                                          where=(np.array(refsys_vals) < threshold), 
+                                          interpolate=True, color='#93C5FD', alpha=0.5)
+                            
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                        
+                        with col2:
+                            if days_needed < max_prediction_days:
+                                # Gunakan fungsi khusus untuk menampilkan kartu
+                                display_target_achieved_card(days_needed, predicted_mjd_list[-1])
+                            else:
+                                # Gunakan fungsi khusus untuk menampilkan kartu
+                                display_target_not_achieved_card(max_prediction_days, threshold)
                     
-                    except Exception as e:
-                        st.error(f"❌ Terjadi error saat melakukan prediksi: {str(e)}")
+                    # Ringkasan hasil semua iterasi
+                    if predicted_mjd_list:
+                        st.markdown('<h3 class="card-title">Rekapitulasi Hasil Prediksi</h3>', unsafe_allow_html=True)
+                        
+                        # Visualisasi gabungan semua iterasi dengan warna adaptif
+                        fig, ax = plt.subplots(figsize=(12, 7))
+                        
+                        # Pilih palet warna yang berfungsi pada tema gelap dan terang
+                        colors = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899']
+                        
+                        for i, (mjd_vals, refsys_vals) in enumerate(refsys_progress_data):
+                            ax.plot(mjd_vals, refsys_vals, marker='.', linestyle='-', 
+                                   color=colors[i % len(colors)],
+                                   label=f'Iterasi #{i+1}', alpha=0.7)
+                        
+                        ax.axhline(threshold, color='#EF4444', linestyle='--', label=f'Ambang {threshold}')
+                        ax.set_xlabel('MJD')
+                        ax.set_ylabel('Nilai REFSYS')
+                        ax.set_title('Perbandingan Semua Iterasi', fontsize=14)
+                        ax.grid(True, alpha=0.3)
+                        ax.legend()
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                        
+                        # Tabel ringkasan
+                        result_data = {
+                            "Iterasi": [f"#{i+1}" for i in range(len(predicted_mjd_list))],
+                            "MJD Target": predicted_mjd_list,
+                            "Nilai REFSYS Awal": refsys_inputs[:len(predicted_mjd_list)],
+                            "Hari Setelah Reset": [len(refsys_progress_data[i][0]) for i in range(len(predicted_mjd_list))]
+                        }
+                        
+                        result_df = pd.DataFrame(result_data)
+                        st.dataframe(result_df, use_container_width=True)
+                        
+                        # Opsi download hasil
+                        csv = result_df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Hasil Prediksi (CSV)",
+                            data=csv,
+                            file_name="prediksi_refsys_hasil.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
 
 # Footer
 st.markdown("""
