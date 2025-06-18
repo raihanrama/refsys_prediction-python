@@ -8,6 +8,9 @@ import time
 import base64
 from io import BytesIO
 import os
+import tempfile
+import shutil
+import zipfile
 
 # Fungsi untuk mengatur tema yang responsif
 def setup_theme():
@@ -265,16 +268,27 @@ if uploaded_file is not None:
             model_option = st.radio("Pilih model:", ["Model Default", "Upload Model Kustom"], horizontal=True)
             
             if model_option == "Upload Model Kustom":
-                model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
+                model_file = st.file_uploader("Upload file model (folder SavedModel):", type=["zip"])
                 if model_file:
                     try:
-                        # Simpan file sementara
-                        with open("temp_model.h5", "wb") as f:
+                        # Buat direktori temporary
+                        temp_dir = tempfile.mkdtemp()
+                        temp_zip = os.path.join(temp_dir, "model.zip")
+                        
+                        # Simpan file zip
+                        with open(temp_zip, "wb") as f:
                             f.write(model_file.getvalue())
-                        # Load model dari file temporary
-                        model = load_model("temp_model.h5")
-                        # Hapus file temporary
-                        os.remove("temp_model.h5")
+                        
+                        # Extract zip file
+                        with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+                            zip_ref.extractall(temp_dir)
+                        
+                        # Load model dari direktori
+                        model = load_model(temp_dir)
+                        
+                        # Bersihkan file temporary
+                        shutil.rmtree(temp_dir)
+                        
                         st.success("✅ Model berhasil diunggah!")
                     except Exception as e:
                         st.error(f"❌ Gagal memuat model: {str(e)}")
@@ -284,7 +298,7 @@ if uploaded_file is not None:
                     model = None
             else:
                 try:
-                    model = load_model("model_lstm_refsys.h5")
+                    model = load_model("model_lstm_refsys")
                     st.info("ℹ️ Menggunakan model default")
                 except Exception as e:
                     st.error(f"❌ Model default tidak ditemukan: {str(e)}")
