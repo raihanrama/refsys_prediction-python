@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from tensorflow.keras.models import load_model  # type: ignore
+from tensorflow.keras.models import load_model
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import time
@@ -265,13 +265,13 @@ if uploaded_file is not None:
             model_option = st.radio("Pilih model:", ["Model Default", "Upload Model Kustom"], horizontal=True)
             
             if model_option == "Upload Model Kustom":
-model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
-if model_file:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as tmp:
-        tmp.write(model_file.read())
-        tmp_path = tmp.name
-    model = load_model(tmp_path)
-    st.success("✅ Model berhasil diunggah!")
+                model_file = st.file_uploader("Upload file model (.h5):", type=["h5"])
+                if model_file:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".h5") as tmp:
+                        tmp.write(model_file.read())
+                        tmp_path = tmp.name
+                    model = load_model(tmp_path)
+                    st.success("✅ Model berhasil diunggah!")
                 else:
                     st.warning("⚠️ Model belum diunggah, akan menggunakan model default.")
                     model = None
