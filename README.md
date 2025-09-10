@@ -171,12 +171,21 @@ This project is licensed under the MIT License. See the LICENSE file for details
 
 ## Contact
 
-For questions, suggestions, or support, please:
+For questions, suggestions, or support, please reach out:
 
-- Open an issue on GitHub
-- Contact the development team
+- **GitHub**: [@raihanrama](https://github.com/raihanrama)
+- **Email**: raihanrama@example.com
+- Open an issue on GitHub for bug reports or feature requests
 - Check the documentation for additional resources
 
 ---
 
+<div align="center">
+
 **Built with Python and Streamlit**
+
+![Python](https://img.shields.io/badge/python-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
+![Machine Learning](https://img.shields.io/badge/ML-FF6F00?style=flat-square&logo=tensorflow&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)
+
+</div>
